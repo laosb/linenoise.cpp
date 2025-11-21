@@ -893,7 +893,7 @@ static void refreshLineWithCompletion(struct linenoiseState * ls, linenoiseCompl
     }
 }
 
-enum ESC_TYPE { ESC_NULL = 0, ESC_DELETE, ESC_UP, ESC_DOWN, ESC_RIGHT, ESC_LEFT, ESC_HOME, ESC_END, ESC_CTRL_LEFT, ESC_CTRL_RIGHT };
+enum ESC_TYPE { ESC_NULL = 0, ESC_DELETE, ESC_UP, ESC_DOWN, ESC_RIGHT, ESC_LEFT, ESC_HOME, ESC_END, ESC_CTRL_LEFT, ESC_CTRL_RIGHT, ESC_ALT_LEFT, ESC_ALT_RIGHT, ESC_CMD_LEFT, ESC_CMD_RIGHT };
 
 static ESC_TYPE readEscapeSequence(struct linenoiseState * l) {
     /* Check if the file input has additional data. */
@@ -941,13 +941,32 @@ static ESC_TYPE readEscapeSequence(struct linenoiseState * l) {
                     if (read(l->ifd, seq2 + 1, 1) == -1) {
                         return ESC_NULL;
                     }
-                    if (seq2[0] == '5') {
-                        switch (seq2[1]) {
-                            case 'D': // Ctrl Left
-                                return ESC_CTRL_LEFT;
-                            case 'C': // Ctrl Right
-                                return ESC_CTRL_RIGHT;
-                        }
+                    // Modifier key detection: 3=Alt, 5=Ctrl, 9=Cmd
+                    switch (seq2[0]) {
+                        case '3': // Alt/Option
+                            switch (seq2[1]) {
+                                case 'D': // Alt Left
+                                    return ESC_ALT_LEFT;
+                                case 'C': // Alt Right
+                                    return ESC_ALT_RIGHT;
+                            }
+                            break;
+                        case '5': // Ctrl
+                            switch (seq2[1]) {
+                                case 'D': // Ctrl Left
+                                    return ESC_CTRL_LEFT;
+                                case 'C': // Ctrl Right
+                                    return ESC_CTRL_RIGHT;
+                            }
+                            break;
+                        case '9': // Cmd
+                            switch (seq2[1]) {
+                                case 'D': // Cmd Left
+                                    return ESC_CMD_LEFT;
+                                case 'C': // Cmd Right
+                                    return ESC_CMD_RIGHT;
+                            }
+                            break;
                     }
                     break;
                 }
@@ -979,6 +998,14 @@ static ESC_TYPE readEscapeSequence(struct linenoiseState * l) {
                 return ESC_END;
         }
     }
+    
+    /* ESC b and ESC f sequences (Alt+Left/Right in some terminals). */
+    else if (seq[0] == 'b') {
+        return ESC_ALT_LEFT;
+    } else if (seq[0] == 'f') {
+        return ESC_ALT_RIGHT;
+    }
+    
     return ESC_NULL;
 }
 
@@ -1720,10 +1747,18 @@ static void handleEscapeSequence(struct linenoiseState * l, int esc_type) {
             linenoiseEditMoveEnd(l);
             break;
         case ESC_CTRL_LEFT:
+        case ESC_ALT_LEFT:
             linenoiseEditPrevWord(l);
             break;
         case ESC_CTRL_RIGHT:
+        case ESC_ALT_RIGHT:
             linenoiseEditNextWord(l);
+            break;
+        case ESC_CMD_LEFT:
+            linenoiseEditMoveHome(l);
+            break;
+        case ESC_CMD_RIGHT:
+            linenoiseEditMoveEnd(l);
             break;
     }
 }
