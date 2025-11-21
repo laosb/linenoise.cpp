@@ -893,7 +893,7 @@ static void refreshLineWithCompletion(struct linenoiseState * ls, linenoiseCompl
     }
 }
 
-enum ESC_TYPE { ESC_NULL = 0, ESC_DELETE, ESC_UP, ESC_DOWN, ESC_RIGHT, ESC_LEFT, ESC_HOME, ESC_END };
+enum ESC_TYPE { ESC_NULL = 0, ESC_DELETE, ESC_UP, ESC_DOWN, ESC_RIGHT, ESC_LEFT, ESC_HOME, ESC_END, ESC_CTRL_LEFT, ESC_CTRL_RIGHT };
 
 static ESC_TYPE readEscapeSequence(struct linenoiseState * l) {
     /* Check if the file input has additional data. */
@@ -924,10 +924,32 @@ static ESC_TYPE readEscapeSequence(struct linenoiseState * l) {
             if (read(l->ifd, seq + 2, 1) == -1) {
                 return ESC_NULL;
             }
-            if (seq[2] == '~') {
-                switch (seq[1]) {
-                    case '3':
-                        return ESC_DELETE;
+            switch (seq[2]) {
+                case '~':
+                    switch (seq[1]) {
+                        case '3':
+                            return ESC_DELETE;
+                    }
+                    break;
+
+                case ';': {
+                    /* Even more extended escape, read additional 2 bytes */
+                    char seq2[2];
+                    if (read(l->ifd, seq2, 1) == -1) {
+                        return ESC_NULL;
+                    }
+                    if (read(l->ifd, seq2 + 1, 1) == -1) {
+                        return ESC_NULL;
+                    }
+                    if (seq2[0] == '5') {
+                        switch (seq2[1]) {
+                            case 'D': // Ctrl Left
+                                return ESC_CTRL_LEFT;
+                            case 'C': // Ctrl Right
+                                return ESC_CTRL_RIGHT;
+                        }
+                    }
+                    break;
                 }
             }
         } else {
@@ -1508,6 +1530,44 @@ static void linenoiseEditDeletePrevWord(struct linenoiseState * l) {
     refreshLine(l);
 }
 
+/* Jump to the beginning of the previous word */
+static void linenoiseEditPrevWord(struct linenoiseState * l) {
+    while (l->pos > 0 && l->buf[l->pos - 1] == ' ') {
+        l->pos--;
+    }
+    while (l->pos > 0 && l->buf[l->pos - 1] != ' ') {
+        l->pos--;
+    }
+    refreshLine(l);
+}
+
+/* Jump to the space after the current word */
+static void linenoiseEditNextWord(struct linenoiseState * l) {
+    while (l->pos < l->len) {
+        if (l->buf[l->pos] != ' ') {
+            break;
+        }
+        if (l->buf[l->pos] == '\0') {
+            break;
+        }
+
+        l->pos++;
+    }
+
+    while (l->pos < l->len) {
+        if (l->buf[l->pos] == ' ') {
+            break;
+        }
+        if (l->buf[l->pos] == '\0') {
+            break;
+        }
+
+        l->pos++;
+    }
+
+    refreshLine(l);
+}
+
 /* This function is part of the multiplexed API of Linenoise, that is used
  * in order to implement the blocking variant of the API but can also be
  * called by the user directly in an event driven program. It will:
@@ -1658,6 +1718,12 @@ static void handleEscapeSequence(struct linenoiseState * l, int esc_type) {
             break;
         case ESC_END:
             linenoiseEditMoveEnd(l);
+            break;
+        case ESC_CTRL_LEFT:
+            linenoiseEditPrevWord(l);
+            break;
+        case ESC_CTRL_RIGHT:
+            linenoiseEditNextWord(l);
             break;
     }
 }
