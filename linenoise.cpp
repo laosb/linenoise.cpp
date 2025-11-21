@@ -932,6 +932,14 @@ static ESC_TYPE readEscapeSequence(struct linenoiseState * l) {
     if (read(l->ifd, seq, 1) == -1) {
         return ESC_NULL;
     }
+
+    /* ESC b and ESC f sequences (Alt+Left/Right in some terminals). */
+    else if (seq[0] == 'b') {
+        return ESC_ALT_LEFT;
+    } else if (seq[0] == 'f') {
+        return ESC_ALT_RIGHT;
+    }
+
     if (read(l->ifd, seq + 1, 1) == -1) {
         return ESC_NULL;
     }
@@ -1017,13 +1025,6 @@ static ESC_TYPE readEscapeSequence(struct linenoiseState * l) {
             case 'F':
                 return ESC_END;
         }
-    }
-
-    /* ESC b and ESC f sequences (Alt+Left/Right in some terminals). */
-    else if (seq[0] == 'b') {
-        return ESC_ALT_LEFT;
-    } else if (seq[0] == 'f') {
-        return ESC_ALT_RIGHT;
     }
 
     return ESC_NULL;
